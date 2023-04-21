@@ -1,5 +1,6 @@
 import bluetooth
 import pygame
+import random
 import time
 from hx711 import HX711
 import RPi.GPIO as GPIO
@@ -10,8 +11,8 @@ host = ""
 port = 1
 makeDrink = True
 
-pump1 = 5
-pump2 = 4
+pump1 = 17
+pump2 = 18
 pump3 = 27
 pump4 = 22
 pump5 = 26
@@ -24,7 +25,7 @@ weightSCK = 12
 ledGreen1 = 10
 ledGreen2 = 9
 ledGreen3 = 11
-ledYellow1 = 18
+ledYellow1 = 4
 ledYellow2 = 8
 ledYellow3 = 7
 ledRed1 = 16
@@ -57,6 +58,7 @@ GPIO.setup(ledRed3, GPIO.OUT)
 
 typeDrink = 0
 
+file = open("virk.txt","w")
 
 #Opretter vægtsensor klassen
 weightSensor = HX711(dout_pin=weightDT, pd_sck_pin = weightSCK, gain = 64)
@@ -75,7 +77,7 @@ def readDistance(echo, trig):
         #Dette er for at sikre at den ikke kommer til at sidde fast i dette loop
         if startTime-stop > 0.5:
             #startTime = time.time()
-            return
+            return 10
         
         #Vent på at den bliver lav
         startTime = time.time()
@@ -87,7 +89,8 @@ def readDistance(echo, trig):
     tid = (stop-startTime)
     distance = tid*17000
     print("Dist: ", distance, " Echo: ",echo)
-    
+    if distance is None:
+        print("none")
     return abs(distance)
 
 
@@ -133,10 +136,17 @@ def makeDrinkMulti(drink):
     turnOffLed()
     
     #Læser afstandssensor
-    while readDistance(afstandSensor1Echo,afstandSensor1Trig) > 6 or readDistance(afstandSensor2Echo,afstandSensor2Trig) > 6:
+    while readDistance(afstandSensor1Echo,afstandSensor1Trig) > 4 or readDistance(afstandSensor2Echo,afstandSensor2Trig) > 4:
         #Evt. lav en lille advarsel til brugeren
+        GPIO.output(ledRed1,True)
+        GPIO.output(ledRed2,True)
+        GPIO.output(ledRed3,True)
         print("Ting")
         continue
+
+    turnOffLed()
+    
+    file.write("I makeDrink funktion")
     
     print("her")
     activePumpList = [0,0,0,0,0] 
@@ -178,10 +188,17 @@ def makeDrinkMulti(drink):
         #print(weightList)
     print("done")
     print(typeDrink)
+    
+    file.write("I makeDrink 2")
+    
+    
+    pygame.mixer.music.stop()
     if typeDrink == 1:
         client.send("loading1")
     if typeDrink == 2:
-        client.send("loading2")    
+        client.send("loading2")
+    file.write("slut makeDrink")
+    stop()
     return True
 
 def progressBar(currentWeight, totalWeight):
@@ -226,6 +243,25 @@ def turnOffLed():
     GPIO.output(ledGreen2,False)
     GPIO.output(ledGreen3,False)
 
+def turnOnLed():
+    GPIO.output(ledRed1,True)
+    GPIO.output(ledRed2,True)
+    GPIO.output(ledRed3,True)
+    GPIO.output(ledYellow1,True)
+    GPIO.output(ledYellow2,True)
+    GPIO.output(ledYellow3,True)
+    GPIO.output(ledGreen1,True)
+    GPIO.output(ledGreen2,True)
+    GPIO.output(ledGreen3,True)
+
+def stop():
+    file.write("Start i stop funktion")
+    pygame.mixer.init()
+    pygame.mixer.music.load("stop.mp3")
+    pygame.mixer.music.play()
+    time.sleep(2)
+    file.write("Slut i stop")
+    
 server = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
 print('Bluetooth Socket Created')
 try:
@@ -274,7 +310,8 @@ try:
                     l5 = int(dataToList[5])
                     
                     pygame.mixer.init()
-                    pygame.mixer.music.load("teq.mp3")
+                    randomNummer = random.randint(1, 5)
+                    pygame.mixer.music.load(str(randomNummer) + ".mp3")
                     pygame.mixer.music.play()
                         
                     makeDrinkMulti([l1,l2,l3,l4,l5])
@@ -286,20 +323,24 @@ try:
                     if play == False:
                         play = True
                         print("play")
-                        pygame.mixer.init()
-                        pygame.mixer.music.load("teq.mp3")
-                        pygame.mixer.music.play()
                     else:
-                         pygame.mixer.music.stop()
-                         play = False
+                        pygame.mixer.music.stop()
+                        play = False
                          
                 # Sending the data.
                 #client.send(send_data)
-except:
+except Exception as error:
         print("Except")
+        file.write("\n")
+        file.write(str(error))
+        file.close()
         # Making all the output pins LOW
         GPIO.cleanup()
+        stopPump(1)
+        stopPump(2)
+        stopPump(3)
+        stopPump(4)
+        stopPump(5)
         # Closing the client and server connection
         client.close()
         server.close()
-
